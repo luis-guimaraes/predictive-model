@@ -3,14 +3,17 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.metrics import accuracy_score, confusion_matrix, classification_report
+from sklearn.preprocessing import OneHotEncoder
 import altair as alt
 import time
 import zipfile
 
 # Page title
-st.set_page_config(page_title='ML Model Building', page_icon='🤖')
-st.title('🤖 ML Model Building')
+st.set_page_config(page_title='Building a ML model', page_icon='🤖')
+st.title('Building a ML model')
 
 with st.expander('About this app'):
   st.markdown('**What can this app do?**')
@@ -19,17 +22,17 @@ with st.expander('About this app'):
   st.markdown('**How to use the app?**')
   st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. As a result, this would initiate the ML model building process, display the model results as well as allowing users to download the generated models and accompanying data.')
 
-  st.markdown('**Under the hood**')
-  st.markdown('Data sets:')
-  st.code('''- Drug solubility data set
-  ''', language='markdown')
+  #st.markdown('**Under the hood**')
+  #st.markdown('Data sets:')
+  #st.code('''- Drug solubility data set
+  #''', language='markdown')
   
-  st.markdown('Libraries used:')
-  st.code('''- Pandas for data wrangling
-- Scikit-learn for building a machine learning model
-- Altair for chart creation
-- Streamlit for user interface
-  ''', language='markdown')
+  #st.markdown('Libraries used:')
+  #st.code('''- Pandas for data wrangling
+#- Scikit-learn for building a machine learning model
+#- Altair for chart creation
+#- Streamlit for user interface
+#  ''', language='markdown')
 
 
 # Sidebar for accepting input parameters
@@ -40,8 +43,8 @@ with st.sidebar:
     st.markdown('**1. Use custom data**')
     uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
     if uploaded_file is not None:
-        df = pd.read_csv(uploaded_file, index_col=False)
-      
+        df = pd.read_csv(uploaded_file, sep=';', index_col=False)
+  
     # Download example data
     @st.cache_data
     def convert_df(input_df):
@@ -55,7 +58,7 @@ with st.sidebar:
         mime='text/csv',
     )
 
-    # Select example data
+    #Select example data
     st.markdown('**1.2. Use example data**')
     example_data = st.toggle('Load example data')
     if example_data:
@@ -66,7 +69,7 @@ with st.sidebar:
 
     st.subheader('2.1. Learning Parameters')
     with st.expander('See parameters'):
-        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 100, 100)
+        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 10, 10)
         parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
         parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
         parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
@@ -94,45 +97,71 @@ if uploaded_file or example_data:
             
         st.write("Splitting data ...")
         time.sleep(sleep_time)
-        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
+
+        categorical_cols = X.select_dtypes(include=['object', 'category']).columns
+        st.write("Categorical columns:", categorical_cols)
+        one_hot_encoder = OneHotEncoder()
+        X_encoded = one_hot_encoder.fit_transform(X[categorical_cols])
+
+        # Convert the one-hot encoded columns to a DataFrame and combine with the remaining columns
+        X_encoded_df = pd.DataFrame(X_encoded.toarray(), columns=one_hot_encoder.get_feature_names_out(categorical_cols))
+        X_combined = pd.concat([X_encoded_df, X.drop(columns=categorical_cols).reset_index(drop=True)], axis=1)
+
+        X_train, X_test, y_train, y_test = train_test_split(X_combined, y, test_size=(100-parameter_split_size)/100, random_state=parameter_random_state)
     
         st.write("Model training ...")
         time.sleep(sleep_time)
 
-        if parameter_max_features == 'all':
-            parameter_max_features = None
-            parameter_max_features_metric = X.shape[1]
+        #if parameter_max_features == 'all':
+        #    parameter_max_features = None
+        #    parameter_max_features_metric = X.shape[1]
+
+        #rf = RandomForestRegressor(
+        #        n_estimators=parameter_n_estimators,
+        #        max_features=parameter_max_features,
+        #        min_samples_split=parameter_min_samples_split,
+        #        min_samples_leaf=parameter_min_samples_leaf,
+        #        random_state=parameter_random_state,
+        #        criterion=parameter_criterion,
+        #       bootstrap=parameter_bootstrap,
+        #        oob_score=parameter_oob_score)
+        #rf.fit(X_train, y_train)
+
+        # Initialize the random forest classifier
+        rf_classifier = RandomForestClassifier(n_estimators=parameter_n_estimators, random_state=parameter_random_state)
         
-        rf = RandomForestRegressor(
-                n_estimators=parameter_n_estimators,
-                max_features=parameter_max_features,
-                min_samples_split=parameter_min_samples_split,
-                min_samples_leaf=parameter_min_samples_leaf,
-                random_state=parameter_random_state,
-                criterion=parameter_criterion,
-                bootstrap=parameter_bootstrap,
-                oob_score=parameter_oob_score)
-        rf.fit(X_train, y_train)
-        
+        # Train the model
+        rf_classifier.fit(X_train, y_train)
+
         st.write("Applying model to make predictions ...")
-        time.sleep(sleep_time)
-        y_train_pred = rf.predict(X_train)
-        y_test_pred = rf.predict(X_test)
+        #time.sleep(sleep_time)
+        y_train_pred = rf_classifier.predict(X_train)
+        y_test_pred = rf_classifier.predict(X_test)
             
         st.write("Evaluating performance metrics ...")
         time.sleep(sleep_time)
-        train_mse = mean_squared_error(y_train, y_train_pred)
-        train_r2 = r2_score(y_train, y_train_pred)
-        test_mse = mean_squared_error(y_test, y_test_pred)
-        test_r2 = r2_score(y_test, y_test_pred)
+        train_accuracy = accuracy_score(y_train, y_train_pred)
+        train_conf_matrix = confusion_matrix(y_train, y_train_pred)
+        train_class_report = classification_report(y_train, y_train_pred)
+
+        st.write("Train model accuracy:", train_accuracy)
+        st.write("Train confusion matrix:", train_conf_matrix)
+        #st.write(class_report)
+
+        test_accuracy = accuracy_score(y_test, y_test_pred)
+        test_conf_matrix = confusion_matrix(y_test, y_test_pred)
+        test_class_report = classification_report(y_test, y_test_pred)
+
+        st.write("Test model accuracy:", test_accuracy)
+        st.write("Test confusion matrix:", test_conf_matrix)
         
         st.write("Displaying performance metrics ...")
         time.sleep(sleep_time)
-        parameter_criterion_string = ' '.join([x.capitalize() for x in parameter_criterion.split('_')])
+        #parameter_criterion_string = ' '.join([x.capitalize() for x in parameter_criterion.split('_')])
         #if 'Mse' in parameter_criterion_string:
         #    parameter_criterion_string = parameter_criterion_string.replace('Mse', 'MSE')
-        rf_results = pd.DataFrame(['Random forest', train_mse, train_r2, test_mse, test_r2]).transpose()
-        rf_results.columns = ['Method', f'Training {parameter_criterion_string}', 'Training R2', f'Test {parameter_criterion_string}', 'Test R2']
+        rf_results = pd.DataFrame(['Random forest', train_accuracy, test_accuracy]).transpose()
+        rf_results.columns = ['Method', 'Training Accuracy', 'Test Accuracy']
         # Convert objects to numerics
         for col in rf_results.columns:
             rf_results[col] = pd.to_numeric(rf_results[col], errors='ignore')
@@ -149,24 +178,24 @@ if uploaded_file or example_data:
     col[2].metric(label="No. of Training samples", value=X_train.shape[0], delta="")
     col[3].metric(label="No. of Test samples", value=X_test.shape[0], delta="")
     
-    with st.expander('Initial dataset', expanded=True):
-        st.dataframe(df, height=210, use_container_width=True)
-    with st.expander('Train split', expanded=False):
-        train_col = st.columns((3,1))
-        with train_col[0]:
-            st.markdown('**X**')
-            st.dataframe(X_train, height=210, hide_index=True, use_container_width=True)
-        with train_col[1]:
-            st.markdown('**y**')
-            st.dataframe(y_train, height=210, hide_index=True, use_container_width=True)
-    with st.expander('Test split', expanded=False):
-        test_col = st.columns((3,1))
-        with test_col[0]:
-            st.markdown('**X**')
-            st.dataframe(X_test, height=210, hide_index=True, use_container_width=True)
-        with test_col[1]:
-            st.markdown('**y**')
-            st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
+    #with st.expander('Initial dataset', expanded=True):
+    #    st.dataframe(df, height=210, use_container_width=True)
+    #with st.expander('Train split', expanded=False):
+    #    train_col = st.columns((3,1))
+    #    with train_col[0]:
+    #        st.markdown('**X**')
+    #        st.dataframe(X_train, height=210, hide_index=True, use_container_width=True)
+    #    with train_col[1]:
+    #        st.markdown('**y**')
+    #        st.dataframe(y_train, height=210, hide_index=True, use_container_width=True)
+    #with st.expander('Test split', expanded=False):
+    #    test_col = st.columns((3,1))
+    #    with test_col[0]:
+    #        st.markdown('**X**')
+    #        st.dataframe(X_test, height=210, hide_index=True, use_container_width=True)
+    #    with test_col[1]:
+    #        st.markdown('**y**')
+    #        st.dataframe(y_test, height=210, hide_index=True, use_container_width=True)
 
     # Zip dataset files
     df.to_csv('dataset.csv', index=False)
@@ -190,14 +219,14 @@ if uploaded_file or example_data:
     
     # Display model parameters
     st.header('Model parameters', divider='rainbow')
-    parameters_col = st.columns(3)
+    parameters_col = st.columns(2)
     parameters_col[0].metric(label="Data split ratio (% for Training Set)", value=parameter_split_size, delta="")
     parameters_col[1].metric(label="Number of estimators (n_estimators)", value=parameter_n_estimators, delta="")
-    parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
+    #parameters_col[2].metric(label="Max features (max_features)", value=parameter_max_features_metric, delta="")
     
     # Display feature importance plot
-    importances = rf.feature_importances_
-    feature_names = list(X.columns)
+    importances = rf_classifier.feature_importances_
+    feature_names = list(X_combined.columns)
     forest_importances = pd.Series(importances, index=feature_names)
     df_importance = forest_importances.reset_index().rename(columns={'index': 'feature', 0: 'value'})
     
@@ -215,33 +244,33 @@ if uploaded_file or example_data:
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
     # Prediction results
-    st.header('Prediction results', divider='rainbow')
-    s_y_train = pd.Series(y_train, name='actual').reset_index(drop=True)
-    s_y_train_pred = pd.Series(y_train_pred, name='predicted').reset_index(drop=True)
-    df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
-    df_train['class'] = 'train'
+    #st.header('Prediction results', divider='rainbow')
+    #s_y_train = pd.Series(y_train, name='actual').reset_index(drop=True)
+    #s_y_train_pred = pd.Series(y_train_pred, name='predicted').reset_index(drop=True)
+    #df_train = pd.DataFrame(data=[s_y_train, s_y_train_pred], index=None).T
+    #df_train['class'] = 'train'
         
-    s_y_test = pd.Series(y_test, name='actual').reset_index(drop=True)
-    s_y_test_pred = pd.Series(y_test_pred, name='predicted').reset_index(drop=True)
-    df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
-    df_test['class'] = 'test'
+    #s_y_test = pd.Series(y_test, name='actual').reset_index(drop=True)
+    #s_y_test_pred = pd.Series(y_test_pred, name='predicted').reset_index(drop=True)
+   # df_test = pd.DataFrame(data=[s_y_test, s_y_test_pred], index=None).T
+    #df_test['class'] = 'test'
     
-    df_prediction = pd.concat([df_train, df_test], axis=0)
+    #df_prediction = pd.concat([df_train, df_test], axis=0)
     
-    prediction_col = st.columns((2, 0.2, 3))
+    #prediction_col = st.columns((2, 0.2, 3))
     
     # Display dataframe
-    with prediction_col[0]:
-        st.dataframe(df_prediction, height=320, use_container_width=True)
+    #with prediction_col[0]:
+    #    st.dataframe(df_prediction, height=320, use_container_width=True)
 
     # Display scatter plot of actual vs predicted values
-    with prediction_col[2]:
-        scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
-                        x='actual',
-                        y='predicted',
-                        color='class'
-                  )
-        st.altair_chart(scatter, theme='streamlit', use_container_width=True)
+    #with prediction_col[2]:
+    #    scatter = alt.Chart(df_prediction).mark_circle(size=60).encode(
+    #                    x='actual',
+    #                    y='predicted',
+    #                    color='class'
+    #              )
+    #    st.altair_chart(scatter, theme='streamlit', use_container_width=True)
 
     
 # Ask for CSV upload if none is detected
