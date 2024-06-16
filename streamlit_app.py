@@ -12,20 +12,15 @@ import time
 import zipfile
 
 # Page title
-st.set_page_config(page_title='Building a ML model', page_icon='🤖')
+st.set_page_config(page_title='Building a ML model', page_icon='')
 st.title('Building a ML model')
 
 with st.expander('About this app'):
   st.markdown('**What can this app do?**')
-  st.info('This app allow users to build a machine learning (ML) model in an end-to-end workflow. Particularly, this encompasses data upload, data pre-processing, ML model building and post-model analysis.')
+  st.info('This app allow users to build a machine learning (ML) model with an end-to-end workflow sim ple steps: data upload, data pre-processing, ML model fitting and post-model analysis.')
 
   st.markdown('**How to use the app?**')
-  st.warning('To engage with the app, go to the sidebar and 1. Select a data set and 2. Adjust the model parameters by adjusting the various slider widgets. As a result, this would initiate the ML model building process, display the model results as well as allowing users to download the generated models and accompanying data.')
-
-  #st.markdown('**Under the hood**')
-  #st.markdown('Data sets:')
-  #st.code('''- Drug solubility data set
-  #''', language='markdown')
+  st.info('To engage with the app, go to the sidebar and 1. Upload a data set and 2. Adjust the model training and parameters by using the various slider widgets. As a result, this would initiate the ML model building process, display the model results as well as allowing users to download the generated models and accompanying data.')
   
   #st.markdown('Libraries used:')
   #st.code('''- Pandas for data wrangling
@@ -34,57 +29,63 @@ with st.expander('About this app'):
 #- Streamlit for user interface
 #  ''', language='markdown')
 
-
 # Sidebar for accepting input parameters
 with st.sidebar:
     # Load data
-    st.header('1.1. Input data')
+    st.header('1. Input data')
 
-    st.markdown('**1. Use custom data**')
-    uploaded_file = st.file_uploader("Upload a CSV file", type=["csv"])
+    uploaded_file = st.file_uploader("Upload the training set", type=["csv"])
     if uploaded_file is not None:
         df = pd.read_csv(uploaded_file, sep=';', index_col=False)
   
     # Download example data
-    @st.cache_data
-    def convert_df(input_df):
-        return input_df.to_csv(index=False).encode('utf-8')
-    example_csv = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
-    csv = convert_df(example_csv)
-    st.download_button(
-        label="Download example CSV",
-        data=csv,
-        file_name='delaney_solubility_with_descriptors.csv',
-        mime='text/csv',
-    )
+    #@st.cache_data
+    #def convert_df(input_df):
+    #    return input_df.to_csv(index=False).encode('utf-8')
+    #example_csv = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
+    #csv = convert_df(example_csv)
+    #st.download_button(
+    #    label="Download example CSV",
+    #    data=csv,
+    #    file_name='delaney_solubility_with_descriptors.csv',
+    #    mime='text/csv',
+    #)
 
     #Select example data
-    st.markdown('**1.2. Use example data**')
-    example_data = st.toggle('Load example data')
-    if example_data:
-        df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
+    #st.markdown('**1.2. Use example data**')
+    #example_data = st.toggle('Load example data')
+    #if example_data:
+        #df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/delaney_solubility_with_descriptors.csv')
 
+    gam_data = st.toggle('Export Predictions')
+    if gam_data is True:
+        gam_file = st.file_uploader("Upload the data to predict", type=["csv"])
+        if gam_file is not None:
+            df_gam = pd.read_csv(gam_file, sep=';', index_col=False)
+    
     st.header('2. Set Parameters')
+
+    st.subheader('2.1. Training Parameters')
     parameter_split_size = st.slider('Data split ratio (% for Training Set)', 10, 90, 80, 5)
 
-    st.subheader('2.1. Learning Parameters')
+    st.subheader('2.2. Learning Parameters')
     with st.expander('See parameters'):
-        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 0, 1000, 10, 10)
+        parameter_n_estimators = st.slider('Number of estimators (n_estimators)', 5, 50, 5, 5)
         parameter_max_features = st.select_slider('Max features (max_features)', options=['all', 'sqrt', 'log2'])
         parameter_min_samples_split = st.slider('Minimum number of samples required to split an internal node (min_samples_split)', 2, 10, 2, 1)
         parameter_min_samples_leaf = st.slider('Minimum number of samples required to be at a leaf node (min_samples_leaf)', 1, 10, 2, 1)
 
-    st.subheader('2.2. General Parameters')
+    st.subheader('2.3. General Parameters')
     with st.expander('See parameters', expanded=False):
         parameter_random_state = st.slider('Seed number (random_state)', 0, 1000, 42, 1)
-        parameter_criterion = st.select_slider('Performance measure (criterion)', options=['squared_error', 'absolute_error', 'friedman_mse'])
-        parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
-        parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
+        parameter_criterion = st.select_slider('Performance measure (criterion)', options=['gini', 'entropy', 'log_loss'])
+        #parameter_bootstrap = st.select_slider('Bootstrap samples when building trees (bootstrap)', options=[True, False])
+        #parameter_oob_score = st.select_slider('Whether to use out-of-bag samples to estimate the R^2 on unseen data (oob_score)', options=[False, True])
 
-    sleep_time = st.slider('Sleep time', 0, 3, 0)
+    sleep_time = 3 #st.slider('Sleep time', 0, 3, 0)
 
 # Initiate the model building process
-if uploaded_file or example_data: 
+if uploaded_file: 
     with st.status("Running ...", expanded=True) as status:
     
         st.write("Loading data ...")
@@ -112,9 +113,9 @@ if uploaded_file or example_data:
         st.write("Model training ...")
         time.sleep(sleep_time)
 
-        #if parameter_max_features == 'all':
-        #    parameter_max_features = None
-        #    parameter_max_features_metric = X.shape[1]
+        if parameter_max_features == 'all':
+            parameter_max_features = None
+            parameter_max_features_metric = X.shape[1]
 
         #rf = RandomForestRegressor(
         #        n_estimators=parameter_n_estimators,
@@ -128,7 +129,7 @@ if uploaded_file or example_data:
         #rf.fit(X_train, y_train)
 
         # Initialize the random forest classifier
-        rf_classifier = RandomForestClassifier(n_estimators=parameter_n_estimators, random_state=parameter_random_state)
+        rf_classifier = RandomForestClassifier(n_estimators=parameter_n_estimators, max_features=parameter_max_features, min_samples_split=parameter_min_samples_split, min_samples_leaf=parameter_min_samples_leaf, criterion=parameter_criterion, random_state=parameter_random_state)
         
         # Train the model
         rf_classifier.fit(X_train, y_train)
@@ -139,7 +140,7 @@ if uploaded_file or example_data:
         y_test_pred = rf_classifier.predict(X_test)
             
         st.write("Evaluating performance metrics ...")
-        time.sleep(sleep_time)
+        #time.sleep(sleep_time)
         train_accuracy = accuracy_score(y_train, y_train_pred)
         train_conf_matrix = confusion_matrix(y_train, y_train_pred)
         train_class_report = classification_report(y_train, y_train_pred)
@@ -243,6 +244,46 @@ if uploaded_file or example_data:
         st.header('Feature importance', divider='rainbow')
         st.altair_chart(bars, theme='streamlit', use_container_width=True)
 
+    if gam_data is True:
+        categorical_cols = df_gam.select_dtypes(include=['object', 'category']).columns
+        X_gam_encoded = one_hot_encoder.fit_transform(df_gam[categorical_cols])
+
+        # Convert the one-hot encoded columns to a DataFrame and combine with the remaining columns
+        X_gam_encoded_df = pd.DataFrame(X_gam_encoded.toarray(), columns=one_hot_encoder.get_feature_names_out(categorical_cols))
+        X_gam_combined = pd.concat([X_gam_encoded_df, df_gam.drop(columns=categorical_cols).reset_index(drop=True)], axis=1)
+
+        # Identify columns that are common to both dataframes
+        common_columns = X_combined.columns.intersection(X_gam_combined.columns)
+
+        # Select only these columns from the second dataframe
+        X_gam_combined_filtered = X_gam_combined[common_columns]
+
+        # Identify columns that are in df1 but not in df2
+        missing_columns = X_combined.columns.difference(X_gam_combined.columns)
+
+        # Add missing columns to df2 and fill with zeros
+        for col in missing_columns:
+            X_gam_combined_filtered[col] = 0
+
+        # Reorder the columns to match the order in df1
+        X_gam_combined_final = X_gam_combined_filtered[X_combined.columns]
+
+        y_gam_pred = rf_classifier.predict(X_gam_combined_final)
+        df_y_gam_pred = pd.DataFrame(y_gam_pred, columns=['Prev'])
+        
+        @st.cache_data
+        def convert_df(df):
+            # IMPORTANT: Cache the conversion to prevent computation on every rerun
+            return df.to_csv().encode("utf-8")
+        csv = convert_df(df_y_gam_pred)
+
+        st.download_button(
+            label="Download predictions",
+            data=csv,
+            file_name="my_predictions.csv",
+            mime="text/csv",
+        )
+        
     # Prediction results
     #st.header('Prediction results', divider='rainbow')
     #s_y_train = pd.Series(y_train, name='actual').reset_index(drop=True)
